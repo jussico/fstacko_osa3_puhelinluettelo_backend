@@ -17,3 +17,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+kutsu_mongoo_listaa.sh
+kutsu_mongoo_add.sh
+.env
+
