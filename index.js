@@ -21,12 +21,12 @@ app.use(cors())
 
 const helloText = 'hello July!'
 
-app.get('/', (req, res) => {
+app.get('/', (req, res, next) => {
     res.send(`<h1>${helloText}</h1>`)
 })
 
 // INFO
-app.get('/info', (req, res) => {
+app.get('/info', (req, res, next) => {
     Contact.find({}).then(result => {
         const infoSivu = `Phonebook has info for ${result.length} people<br> ${new Date()}<br>`
         res.send(infoSivu)
@@ -34,7 +34,7 @@ app.get('/info', (req, res) => {
 })
 
 // LISTA
-app.get('/persons', (req, res) => {
+app.get('/persons', (req, res, next) => {
     Contact.find({}).then(contacts => {
         res.json(contacts)
     })
@@ -92,47 +92,59 @@ const generateId = () => {
 }
 
 // ADD ONE
-app.post('/persons', (request, response) => {
+app.post('/persons', (request, response, next) => {
 
     const body = request.body
 
-    // data validation checks
-    {
-        let message = ''
-        const noName = (body.name === undefined)
-        const noNumber = body.number === undefined
-        if (noName) message = message.concat('no name! ')
-        if (noNumber) message = message.concat('no number! ')
-        if (!noNumber && !noName) {
-            Contact.find({}).then(contacts => {
-                if (contacts.find(contact => contact.name == body.name)) {
-                    message = message.concat('name exists! ')
-                }
+    const contact = new Contact({
+        name: body.name,
+        number: body.number,
+        id: generateId()
+    })
 
-                if ('' !== message) {
-                    console.log("can't add because: ", message)
-                    return response.status(400).json({
-                        error: message
-                    })
-                }
+    contact.save().then(savedContact => {
+        response.json(savedContact.toJSON())
+    })
+    .catch(error => next(error))
 
-                const contact = new Contact({
-                    name: body.name,
-                    number: body.number,
-                    id: generateId()
-                })
+    // old hand-coded data validation check-code in all.
+    // {
+    //     let message = ''
+    //     const noName = (body.name === undefined)
+    //     const noNumber = body.number === undefined
+    //     if (noName) message = message.concat('no name! ')
+    //     if (noNumber) message = message.concat('no number! ')
+    //     if (!noNumber && !noName) {
+    //         Contact.find({}).then(contacts => {
+    //             if (contacts.find(contact => contact.name == body.name)) {
+    //                 message = message.concat('name exists! ')
+    //             }
 
-                contact.save().then(savedContact => {
-                    response.json(savedContact.toJSON())
-                })
+    //             if ('' !== message) {
+    //                 console.log("can't add because: ", message)
+    //                 return response.status(400).json({
+    //                     error: message
+    //                 })
+    //             }
 
-            })
-                .catch(error => {
-                    console.log(error);
-                    response.status(404).end()
-                })
-        }
-    }
+    //             const contact = new Contact({
+    //                 name: body.name,
+    //                 number: body.number,
+    //                 id: generateId()
+    //             })
+
+    //             contact.save().then(savedContact => {
+    //                 response.json(savedContact.toJSON())
+    //             })
+    //             .catch(error => next(error))
+
+    //         })
+    //             .catch(error => {
+    //                 console.log(error);
+    //                 response.status(404).end()
+    //             })
+    //     }
+    // }
 })
 
 const unknownEndpoint = (request, response) => {
@@ -147,6 +159,8 @@ const errorHandler = (error, request, response, next) => {
 
     if (error.name === 'CastError' && error.kind == 'ObjectId') {
         return response.status(400).send({ error: 'malformatted id' })
+    } else if (error.name === 'ValidationError') {
+        return response.status(400).json({ error: error.message })
     }
 
     next(error)
