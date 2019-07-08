@@ -21,48 +21,20 @@ app.use(cors())
 
 const helloText = 'hello July!'
 
-// let persons = [
-//     {
-//         "name": "Arto Hellas",
-//         "number": "040-123456",
-//         "id": 1
-//     },
-//     {
-//         "name": "Ada Lovelace",
-//         "number": "39-44-5323523",
-//         "id": 2
-//     },
-//     {
-//         "name": "Dan Abramov",
-//         "number": "12-43-234345",
-//         "id": 3
-//     },
-//     {
-//         "name": "Mary Poppendieck",
-//         "number": "39-23-6423122",
-//         "id": 4
-//     }
-// ]
-
 app.get('/', (req, res) => {
     res.send(`<h1>${helloText}</h1>`)
 })
 
-const infoSivu =
-    `Phonebook has info for TODO people<br>
-${new Date()}<br>`
-// const infoSivu =
-//     `Phonebook has info for ${persons.length} people<br>
-// ${new Date()}<br>`
-
 // INFO
 app.get('/info', (req, res) => {
-    res.send(infoSivu)
+    Contact.find({}).then(result => {
+        const infoSivu = `Phonebook has info for ${result.length} people<br> ${new Date()}<br>`
+        res.send(infoSivu)
+    })
 })
 
 // LISTA
 app.get('/persons', (req, res) => {
-    // res.json(persons)
     Contact.find({}).then(contacts => {
         res.json(contacts)
     })
@@ -73,22 +45,42 @@ app.get('/persons', (req, res) => {
 })
 
 // GET ONE
-app.get('/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-
-    if (person) {
-        response.json(person)
-    } else {
-        response.status(404).end()
-    }
+app.get('/persons/:id', (request, response, next) => {
+    Contact.findById(request.params.id)
+        .then(contact => {
+            if (contact) {
+                response.json(contact.toJSON())
+            } else {
+                response.status(404).end()
+            }
+        })
+        .catch(error => next(error))
 })
 
 // DELETE ONE
-app.delete('/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    persons = persons.filter(person => person.id !== id)
-    response.status(204).end()
+app.delete('/persons/:id', (request, response, next) => {
+    Contact.findByIdAndRemove(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))
+})
+
+// UPDATE ONE
+app.put('/persons/:id', (request, response, next) => {
+
+    const body = request.body
+
+    const contact = {
+        name: body.name,
+        number: body.number
+    }
+
+    Contact.findByIdAndUpdate(request.params.id, contact, { new: true })
+        .then(updatedContact => {
+            response.json(updatedContact.toJSON())
+        })
+        .catch(error => next(error))
 })
 
 const generateId = () => {
@@ -111,36 +103,57 @@ app.post('/persons', (request, response) => {
         const noNumber = body.number === undefined
         if (noName) message = message.concat('no name! ')
         if (noNumber) message = message.concat('no number! ')
-        // if(!noNumber && !noName && persons.find(person => person.name == body.name)) {
-        //     message = message.concat('name exists! ')
-        // }
-        if ('' !== message) {
-            console.log("can't add because: ", message)
-            return response.status(400).json({
-                error: message
+        if (!noNumber && !noName) {
+            Contact.find({}).then(contacts => {
+                if (contacts.find(contact => contact.name == body.name)) {
+                    message = message.concat('name exists! ')
+                }
+
+                if ('' !== message) {
+                    console.log("can't add because: ", message)
+                    return response.status(400).json({
+                        error: message
+                    })
+                }
+
+                const contact = new Contact({
+                    name: body.name,
+                    number: body.number,
+                    id: generateId()
+                })
+
+                contact.save().then(savedContact => {
+                    response.json(savedContact.toJSON())
+                })
+
             })
+                .catch(error => {
+                    console.log(error);
+                    response.status(404).end()
+                })
         }
     }
-
-    // oli person
-    const contact = new Contact({
-        name: body.name,
-        number: body.number,
-        id: generateId()
-    })
-
-    // TODO: eikö tarvitakaan?
-
-    // persons = persons.concat(person)
-
-    // console.log(person)
-
-    contact.save().then(savedContact => {
-        response.json(savedContact.toJSON())
-    })
-
-    // response.json(person)
 })
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+
+// olemattomien osoitteiden käsittely
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+
+    if (error.name === 'CastError' && error.kind == 'ObjectId') {
+        return response.status(400).send({ error: 'malformatted id' })
+    }
+
+    next(error)
+}
+
+app.use(errorHandler)
+
 
 const PORT = process.env.PORT
 app.listen(PORT, () => {
